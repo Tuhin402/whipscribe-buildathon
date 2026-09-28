@@ -1,0 +1,472 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="WhipScribe Track 1 UI and UX prototype: quota-aware uploads, responsive Library layout, and mobile navigation." />
+  <title>WhipScribe — Track 1 UI Prototype</title>
+  <style>
+    :root {
+      --green-950: #123d2b;
+      --green-900: #165238;
+      --green-800: #1f6a45;
+      --green-700: #2b7b50;
+      --green-100: #eaf5ed;
+      --green-50: #f4faf5;
+      --ink: #172033;
+      --muted: #667085;
+      --line: #e5e9e7;
+      --surface: #ffffff;
+      --surface-soft: #f8fbf8;
+      --danger: #b42318;
+      --danger-bg: #fff2f1;
+      --danger-line: #f4c7c3;
+      --warning-bg: #fff8eb;
+      --warning-line: #f1ddb1;
+      --shadow: 0 10px 30px rgba(24, 49, 37, .07);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #fff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    a { color: inherit; }
+
+    .prototype-bar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 18px;
+      background: #10251b;
+      color: #fff;
+      font-size: 13px;
+    }
+    .prototype-bar strong { font-weight: 750; }
+    .prototype-bar .mode-note { opacity: .78; }
+    .state-switcher {
+      display: flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 10px;
+      background: rgba(255,255,255,.1);
+    }
+    .state-switcher button {
+      border: 0;
+      border-radius: 7px;
+      padding: 6px 10px;
+      color: #dfe9e3;
+      background: transparent;
+      font-size: 12px;
+    }
+    .state-switcher button.active {
+      color: #143e2b;
+      background: #fff;
+    }
+
+    .app {
+      min-height: calc(100vh - 45px);
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      position: sticky;
+      top: 45px;
+      height: calc(100vh - 45px);
+      display: flex;
+      flex-direction: column;
+      padding: 16px 14px 14px;
+      border-right: 1px solid var(--line);
+      background: linear-gradient(180deg, #fff 0%, #fbfdfb 100%);
+    }
+    .brand-row { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
+    .brand-mark {
+      width: 42px; height: 42px; display: grid; place-items: center;
+      border-radius: 11px; background: var(--green-800); color: white;
+      font-size: 24px; font-weight: 800;
+    }
+    .brand-name { font-size: 18px; font-weight: 800; }
+    .beta { margin-left: auto; padding: 5px 8px; border-radius: 9px; background: var(--green-100); color: var(--green-900); font-size: 11px; font-weight: 750; }
+
+    .new-btn {
+      width: 100%; border: 0; border-radius: 10px; padding: 13px 14px;
+      display: flex; align-items: center; justify-content: center; gap: 9px;
+      color: #fff; background: var(--green-800); font-weight: 750;
+    }
+    .new-btn:hover { background: var(--green-900); }
+
+    .nav { margin-top: 14px; display: grid; gap: 3px; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+      border-radius: 9px; text-decoration: none; color: #273044;
+    }
+    .nav-item:hover, .nav-item.active { background: var(--green-100); color: var(--green-900); }
+    .nav-icon { width: 22px; text-align: center; font-size: 20px; }
+    .nav-divider { height: 1px; background: var(--line); margin: 12px 10px; }
+    .sidebar-spacer { flex: 1; }
+    .credits-card {
+      padding: 12px 13px; border-radius: 11px; background: var(--warning-bg); border: 1px solid #f6e5c4;
+      color: #8a5a13;
+    }
+    .credits-card strong { display: block; color: #253027; font-size: 14px; }
+    .credits-card span { font-size: 13px; }
+    .account { display: flex; align-items: center; gap: 9px; padding: 14px 8px 2px; border-top: 1px solid var(--line); margin-top: 14px; }
+    .avatar { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 50%; background: #2d8a59; color: #fff; font-weight: 700; }
+    .account-email { min-width: 0; flex: 1; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .workspace { min-width: 0; background: #fff; }
+    .topbar {
+      height: 64px; display: flex; align-items: center; gap: 18px; padding: 0 28px;
+      border-bottom: 1px solid var(--line); background: rgba(255,255,255,.96);
+    }
+    .global-search { min-width: 220px; max-width: 820px; flex: 1; position: relative; }
+    .global-search input, .library-search input {
+      width: 100%; border: 1px solid #dce3df; border-radius: 10px; outline: none;
+      color: var(--ink); background: #fff;
+    }
+    .global-search input { height: 42px; padding: 0 76px 0 44px; }
+    .global-search input:focus, .library-search input:focus { border-color: #8ebba0; box-shadow: 0 0 0 3px rgba(43,123,80,.1); }
+    .search-symbol { position: absolute; left: 14px; top: 9px; font-size: 19px; color: #748094; }
+    .shortcut { position: absolute; right: 8px; top: 7px; display: flex; gap: 4px; }
+    .key { padding: 4px 7px; border: 1px solid #e7ece9; border-radius: 7px; background: #f6f8f7; color: #677268; font-size: 11px; }
+    .top-actions { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+    .balance { padding: 10px 14px; border-radius: 22px; background: var(--green-50); color: var(--green-900); font-weight: 750; white-space: nowrap; }
+    .signout, .outline-btn { border: 1px solid #dce3df; background: #fff; border-radius: 10px; padding: 10px 14px; color: #253044; }
+
+    .content {
+      width: min(100%, 1500px);
+      margin: 0 auto;
+      padding: 20px clamp(20px, 3vw, 36px) 42px;
+    }
+    .page-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+    h1 { margin: 0; font-size: clamp(30px, 3vw, 38px); line-height: 1.1; letter-spacing: -.03em; }
+    .subheading { margin: 4px 0 0; color: var(--muted); font-size: 17px; }
+    .ask { white-space: nowrap; display: inline-flex; align-items: center; gap: 8px; }
+
+    .source-grid { display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 10px; margin-top: 18px; }
+    .source-card {
+      min-width: 0; min-height: 116px; padding: 16px; border: 1px solid #e0e8e1; border-radius: 12px;
+      background: linear-gradient(145deg, #fbfefb, #f5f9f5); display: flex; align-items: flex-start; gap: 12px;
+    }
+    .source-card .source-icon { flex: 0 0 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: #e9f4eb; color: var(--green-800); font-size: 23px; }
+    .source-copy { min-width: 0; flex: 1; }
+    .source-copy strong { display: block; font-size: 15px; }
+    .source-copy span { display: block; margin-top: 6px; color: var(--muted); font-size: 13px; }
+    .source-arrow { margin-left: auto; width: 30px; height: 30px; border: 1px solid #d4e2d8; border-radius: 50%; display: grid; place-items: center; color: var(--green-800); }
+
+    .quota-card { border-color: var(--danger-line); background: linear-gradient(145deg, #fff9f8, #fff); }
+    .quota-card .source-icon { background: #ffebea; color: var(--danger); }
+    .quota-box { margin-top: 10px; padding: 9px 10px; border: 1px solid #f5c7c3; border-radius: 9px; background: var(--danger-bg); color: var(--danger); }
+    .quota-title { font-weight: 800; font-size: 13px; }
+    .quota-reset { display: block; margin-top: 2px; font-size: 11px; color: #9f4c45; }
+    .quota-link { display: inline-block; margin-top: 8px; color: #9f2f27; font-size: 12px; font-weight: 750; text-decoration: underline; }
+    .disabled-upload { margin-top: 10px; width: 100%; border: 0; border-radius: 8px; padding: 9px; background: #dedbdd; color: #99959a; font-weight: 700; cursor: not-allowed; }
+
+    .library-toolbar { margin-top: 24px; border-bottom: 1px solid var(--line); }
+    .tabs-row { display: flex; align-items: center; gap: 28px; }
+    .tab { padding: 0 0 10px; border: 0; border-bottom: 3px solid transparent; background: none; color: #667085; font-weight: 600; }
+    .tab.active { color: var(--ink); border-bottom-color: var(--green-800); }
+    .toolbar-actions { margin-left: auto; display: flex; gap: 8px; }
+    .toolbar-btn { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #dce3df; border-radius: 9px; padding: 9px 12px; background: #fff; color: #273044; }
+    .library-search { position: relative; margin-top: 10px; }
+    .library-search input { height: 46px; padding: 0 18px 0 46px; }
+    .library-search .search-symbol { top: 11px; }
+
+    .recording-head { display: grid; grid-template-columns: 54px minmax(220px,2.2fr) 1fr 1fr 1fr 1.1fr; align-items: center; padding: 18px 12px 10px; color: #667085; font-size: 12px; font-weight: 700; }
+    .empty-state { min-height: 290px; display: grid; place-items: center; border: 1px dashed #dbe4de; border-radius: 12px; margin-top: 4px; background: #fff; text-align: center; padding: 30px; }
+    .empty-icon { width: 70px; height: 70px; margin: 0 auto 12px; display: grid; place-items: center; border-radius: 18px; background: #eaf6ed; font-size: 34px; }
+    .empty-state h2 { margin: 0; font-size: 21px; }
+    .empty-state p { max-width: 520px; margin: 7px auto 15px; color: var(--muted); }
+    .primary-btn { border: 0; border-radius: 9px; padding: 11px 17px; color: #fff; background: var(--green-800); font-weight: 750; }
+    .pagination { display: flex; justify-content: space-between; color: #667085; margin-top: 14px; font-size: 13px; }
+    .pagination button { border: 1px solid #e7ebe9; border-radius: 9px; padding: 9px 13px; background: #fff; color: #b1b7bc; }
+
+    .mobile-nav { display: none; }
+    .mobile-nav-item { flex: 1; border: 0; background: transparent; color: #687281; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 11px; }
+    .mobile-nav-item .mobile-icon { width: 38px; height: 30px; display: grid; place-items: center; border-radius: 18px; font-size: 20px; }
+    .mobile-nav-item.active { color: var(--green-800); }
+    .mobile-nav-item.active .mobile-icon { background: #e9f4eb; }
+    .mobile-dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+
+    .notes {
+      max-width: 980px; margin: 34px auto 0; padding: 18px 20px; border: 1px solid #e4e9e6; border-radius: 12px; background: #fbfdfb;
+    }
+    .notes h2 { margin: 0 0 8px; font-size: 17px; }
+    .notes p { margin: 6px 0; color: #596579; font-size: 14px; }
+    .notes code { padding: 2px 5px; border-radius: 5px; background: #eef2ef; }
+
+    body.preview-mobile .app {
+      width: min(390px, 100%);
+      margin: 0 auto;
+      border-left: 1px solid #edf0ee;
+      border-right: 1px solid #edf0ee;
+    }
+    body.preview-mobile .sidebar { display: none; }
+    body.preview-mobile .app { display: block; padding-bottom: 72px; }
+    body.preview-mobile .topbar { height: 62px; padding: 0 12px; }
+    body.preview-mobile .global-search { display: none; }
+    body.preview-mobile .top-actions { width: 100%; justify-content: flex-end; }
+    body.preview-mobile .content { padding: 18px 10px 28px; }
+    body.preview-mobile .source-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    body.preview-mobile .source-card { min-height: 122px; padding: 12px; gap: 8px; }
+    body.preview-mobile .source-arrow { display: none; }
+    body.preview-mobile .recording-head { display: none; }
+    body.preview-mobile .mobile-nav { display: flex; left: 50%; right: auto; width: min(390px, 100%); transform: translateX(-50%); }
+    body.preview-mobile .notes { display: none; }
+
+    @media (max-width: 1100px) {
+      .source-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
+      .recording-head { grid-template-columns: 48px minmax(180px,2fr) 1fr 1fr 1fr; }
+      .recording-head > :nth-child(5) { display: none; }
+    }
+
+    @media (max-width: 900px) {
+      .prototype-bar { position: relative; align-items: flex-start; flex-direction: column; gap: 8px; }
+      .app { display: block; min-height: calc(100vh - 82px); padding-bottom: 72px; }
+      .sidebar { display: none; }
+      .topbar { height: 62px; padding: 0 16px; }
+      .global-search { display: none; }
+      .top-actions { width: 100%; justify-content: flex-end; }
+      .balance { padding: 9px 13px; }
+      .content { padding: 20px 16px 32px; }
+      .page-heading { align-items: flex-end; }
+      .page-heading .ask { display: inline-flex; }
+      h1 { font-size: 31px; }
+      .subheading { font-size: 15px; }
+      .source-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+      .source-card { min-height: 128px; padding: 14px; }
+      .source-card .source-icon { flex-basis: 38px; height: 38px; }
+      .source-arrow { display: none; }
+      .library-toolbar { margin-top: 20px; }
+      .tabs-row { gap: 24px; flex-wrap: wrap; }
+      .toolbar-actions { width: 100%; margin-left: 0; }
+      .toolbar-btn { flex: 0 0 auto; }
+      .recording-head { display: none; }
+      .empty-state { min-height: 240px; }
+      .mobile-nav {
+        position: fixed; left: 0; right: 0; bottom: 0; z-index: 90;
+        height: 72px; display: flex; padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+        border-top: 1px solid #e3e9e5; background: rgba(255,255,255,.98); box-shadow: 0 -8px 24px rgba(18,61,43,.06);
+      }
+      .notes { margin-top: 20px; }
+    }
+
+    @media (max-width: 560px) {
+      .prototype-bar .mode-note { display: none; }
+      .state-switcher { width: 100%; }
+      .state-switcher button { flex: 1; }
+      .top-actions { gap: 7px; }
+      .signout { padding: 9px 11px; }
+      .content { padding: 18px 12px 28px; }
+      .page-heading { align-items: flex-start; }
+      .page-heading .ask { margin-top: 3px; padding: 8px 10px; }
+      .source-grid { grid-template-columns: 1fr 1fr; }
+      .source-card { min-height: 122px; }
+      .source-copy strong { font-size: 14px; }
+      .source-copy span { font-size: 12px; }
+      .quota-card { grid-column: 1 / -1; }
+      .quota-card .source-copy span { font-size: 13px; }
+      .library-search input { height: 48px; }
+      .toolbar-actions { gap: 7px; }
+      .toolbar-btn { padding: 9px 10px; }
+      .toolbar-btn:last-child { width: 44px; justify-content: center; font-size: 0; }
+      .empty-state { min-height: 220px; border-left: 0; border-right: 0; border-radius: 0; padding: 28px 10px; }
+      .pagination { align-items: flex-start; gap: 10px; }
+      .pagination > div:last-child { display: flex; gap: 5px; }
+      .notes { display: none; }
+    }
+
+    @media (max-width: 380px) {
+      .content { padding-left: 10px; padding-right: 10px; }
+      .source-grid { gap: 8px; }
+      .source-card { padding: 12px; gap: 8px; }
+      .source-card .source-icon { flex-basis: 34px; height: 34px; font-size: 18px; }
+      .source-copy strong { font-size: 13px; }
+      .source-copy span { font-size: 11px; }
+      .tabs-row { gap: 18px; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="prototype-bar">
+    <div><strong>Track 1 prototype</strong> <span class="mode-note">— quota-aware Library, responsive desktop layout, and icon-led mobile navigation</span></div>
+    <div class="state-switcher" aria-label="Prototype states">
+      <button class="active" data-state="normal">Normal</button>
+      <button data-state="quota">0 min</button>
+      <button data-state="mobile">Mobile</button>
+    </div>
+  </div>
+
+  <div class="app" id="app">
+    <aside class="sidebar" aria-label="Desktop navigation">
+      <div class="brand-row">
+        <div class="brand-mark">W</div><div class="brand-name">WhipScribe</div><span class="beta">BETA</span>
+      </div>
+      <button class="new-btn">＋ <span>New transcript</span></button>
+      <nav class="nav">
+        <a class="nav-item active" href="#library"><span class="nav-icon">▣</span>Library</a>
+        <a class="nav-item" href="#sources"><span class="nav-icon">♧</span>Sources</a>
+        <a class="nav-item" href="#activity"><span class="nav-icon">☷</span>Activity</a>
+        <a class="nav-item" href="#trash"><span class="nav-icon">▢</span>Trash / Undo</a>
+      </nav>
+      <div class="nav-divider"></div>
+      <nav class="nav">
+        <a class="nav-item" href="#api"><span class="nav-icon">&lt;/&gt;</span>Business APIs</a>
+      </nav>
+      <div class="sidebar-spacer"></div>
+      <div class="credits-card">
+        <strong>Credits</strong>
+        <span id="sidebarCredits">0.0 h left · top up →</span>
+      </div>
+      <div class="account">
+        <div class="avatar">T</div>
+        <div class="account-email">tuhinsarkar581@gmail.com</div>
+        <span aria-hidden="true">↪</span>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div class="global-search">
+          <span class="search-symbol" aria-hidden="true">⌕</span>
+          <input aria-label="Global search" placeholder="Search transcripts, folders, or keywords..." />
+          <div class="shortcut"><span class="key">Ctrl</span><span class="key">K</span></div>
+        </div>
+        <div class="top-actions">
+          <span class="balance" id="topBalance">0.0 h</span>
+          <button class="signout">Sign out</button>
+        </div>
+      </header>
+
+      <section class="content" id="library">
+        <div class="page-heading">
+          <div>
+            <h1>Library</h1>
+            <p class="subheading">0 folders · 0 filed recordings</p>
+          </div>
+          <button class="outline-btn ask">⌕ <span>Ask library</span></button>
+        </div>
+
+        <section class="source-grid" aria-label="Transcript sources">
+          <article class="source-card" id="uploadCard">
+            <div class="source-icon" aria-hidden="true">⇧</div>
+            <div class="source-copy">
+              <strong>Upload files</strong>
+              <span>Audio or video · one or many</span>
+              <div class="quota-box" id="quotaBox" hidden>
+                <div class="quota-title">◷ &nbsp;0 min free transcription remaining</div>
+                <span class="quota-reset">Resets tomorrow</span>
+                <a class="quota-link" href="#credits">Add credits to transcribe now →</a>
+                <button class="disabled-upload" disabled>⇧ &nbsp; Upload files</button>
+              </div>
+            </div>
+            <div class="source-arrow" aria-hidden="true">›</div>
+          </article>
+
+          <article class="source-card"><div class="source-icon">↗</div><div class="source-copy"><strong>Paste links</strong><span>One link or a whole list</span></div><div class="source-arrow">›</div></article>
+          <article class="source-card"><div class="source-icon">♩</div><div class="source-copy"><strong>Record audio</strong><span>Start with your microphone</span></div><div class="source-arrow">›</div></article>
+          <article class="source-card"><div class="source-icon">⇧</div><div class="source-copy"><strong>Import a folder</strong><span>A whole folder from your computer</span></div><div class="source-arrow">›</div></article>
+          <article class="source-card"><div class="source-icon">△</div><div class="source-copy"><strong>Google Drive</strong><span>Import from your Drive</span></div><div class="source-arrow">›</div></article>
+        </section>
+
+        <section class="library-toolbar">
+          <div class="tabs-row">
+            <button class="tab active">All files</button>
+            <button class="tab">Folders</button>
+            <div class="toolbar-actions">
+              <button class="toolbar-btn">☷ <span>Filters</span></button>
+              <button class="toolbar-btn">Date added⌄</button>
+              <button class="toolbar-btn" aria-label="Download">↓</button>
+            </div>
+          </div>
+          <div class="library-search">
+            <span class="search-symbol" aria-hidden="true">⌕</span>
+            <input aria-label="Search files" placeholder="Search names or words in your transcripts..." />
+          </div>
+        </section>
+
+        <div class="recording-head" aria-hidden="true">
+          <span>□</span><span>Name</span><span>Type</span><span>Duration</span><span>Size</span><span>Date added ↓</span>
+        </div>
+
+        <section class="empty-state">
+          <div>
+            <div class="empty-icon" aria-hidden="true">▱</div>
+            <h2>No recordings yet.</h2>
+            <p>Upload files, record audio, import a folder, or paste links to get started with WhipScribe.</p>
+            <button class="primary-btn">⇧ &nbsp; Upload files</button>
+          </div>
+        </section>
+
+        <div class="pagination">
+          <span>0 results · Page 1 of 1</span>
+          <div><button disabled>← Previous</button> <button disabled>Next →</button></div>
+        </div>
+
+        <section class="notes">
+          <h2>What changed in this prototype</h2>
+          <p><strong>1. Quota timing:</strong> when no free minutes remain, the upload card explains the blocking condition before submission instead of waiting for a failed recording.</p>
+          <p><strong>2. Desktop width:</strong> the Library uses a responsive content container up to 1500px while keeping individual controls readable.</p>
+          <p><strong>3. Mobile navigation:</strong> below 900px the desktop sidebar becomes a persistent bottom navigation with familiar icons, short labels, and a visible active state.</p>
+          <p><strong>4. Scope:</strong> this is a front-end prototype. It does not perform real uploads, transcription, billing, authentication, or API calls.</p>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <nav class="mobile-nav" aria-label="Mobile navigation">
+    <button class="mobile-nav-item active"><span class="mobile-icon">▣</span><span>Library</span><span class="mobile-dot"></span></button>
+    <button class="mobile-nav-item"><span class="mobile-icon">▤</span><span>Sources</span></button>
+    <button class="mobile-nav-item"><span class="mobile-icon">⌁</span><span>Activity</span></button>
+    <button class="mobile-nav-item"><span class="mobile-icon">▢</span><span>Trash</span></button>
+    <button class="mobile-nav-item"><span class="mobile-icon">&lt;/&gt;</span><span>API</span></button>
+  </nav>
+
+  <script>
+    const quotaBox = document.getElementById('quotaBox');
+    const uploadCard = document.getElementById('uploadCard');
+    const sidebarCredits = document.getElementById('sidebarCredits');
+    const topBalance = document.getElementById('topBalance');
+    const buttons = document.querySelectorAll('.state-switcher button');
+
+    function setState(state) {
+      buttons.forEach(button => button.classList.toggle('active', button.dataset.state === state));
+      const quota = state === 'quota';
+      quotaBox.hidden = !quota;
+      uploadCard.classList.toggle('quota-card', quota);
+      sidebarCredits.textContent = quota ? '0.0 h left · top up →' : '0.0 h left · top up →';
+      topBalance.textContent = quota ? '0.0 h' : '0.0 h';
+      document.body.classList.toggle('preview-mobile', state === 'mobile');
+      document.body.dataset.preview = state;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    buttons.forEach(button => button.addEventListener('click', () => setState(button.dataset.state)));
+
+    document.querySelectorAll('.mobile-nav-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.querySelectorAll('.mobile-nav-item').forEach(x => x.classList.remove('active'));
+        item.classList.add('active');
+      });
+    });
+
+    setState('normal');
+  </script>
+</body>
+</html>
