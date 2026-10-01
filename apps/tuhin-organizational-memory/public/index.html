@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="DecisionTrace — evidence-backed organizational memory built on WhipScribe.">
+  <title>DecisionTrace — Organizational Memory</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#">
+      <span class="brand-mark">D</span>
+      <span>
+        <strong>DecisionTrace</strong>
+        <small>Organizational memory</small>
+      </span>
+    </a>
+    <div class="top-actions">
+      <span id="modeBadge" class="mode-badge">DEMO MODE</span>
+      <button id="resetDemo" class="ghost-btn">Reset demo</button>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div>
+        <p class="eyebrow">TRACK 4 · WHIPSCRIBE WORKFLOW</p>
+        <h1>Remember the decision,<br>not just the meeting.</h1>
+        <p class="hero-copy">
+          DecisionTrace turns conversations into a persistent evidence graph of
+          <strong>decisions, reasoning, assumptions, disagreements and promises</strong>,
+          then shows what changed later and why.
+        </p>
+      </div>
+      <div class="hero-card">
+        <div class="hero-card-label">ONE FLOW</div>
+        <div class="flow-line">
+          <span>Recording</span><b>→</b><span>Evidence</span><b>→</b><span>Memory</span><b>→</b><span>Drift</span>
+        </div>
+        <p>Every insight keeps a path back to the original speaker and timestamp.</p>
+      </div>
+    </section>
+
+    <section id="uploadPanel" class="upload-panel">
+      <div>
+        <p class="eyebrow">INGEST</p>
+        <h2>Turn one meeting into organizational memory</h2>
+        <p>Upload a recording and keep the transcript as the evidence layer.</p>
+      </div>
+      <form id="uploadForm" class="upload-form">
+        <label class="file-picker">
+          <input id="fileInput" type="file" accept="audio/*,video/*" required>
+          <span id="fileName">Choose audio or video</span>
+        </label>
+        <button class="primary-btn" type="submit">Process meeting</button>
+      </form>
+      <div id="uploadStatus" class="status-card" hidden></div>
+    </section>
+
+    <section class="metric-grid" id="metricGrid" aria-label="Memory metrics">
+      <article class="metric-card">
+        <span>Meetings</span>
+        <strong id="metricMeetings">—</strong>
+        <small>in memory</small>
+      </article>
+      <article class="metric-card decision">
+        <span>Decisions</span>
+        <strong id="metricDecisions">—</strong>
+        <small>with evidence</small>
+      </article>
+      <article class="metric-card drift">
+        <span>Decision drift</span>
+        <strong id="metricDrift">—</strong>
+        <small>changes detected</small>
+      </article>
+      <article class="metric-card promise">
+        <span>Open promises</span>
+        <strong id="metricPromises">—</strong>
+        <small>still unresolved</small>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <div class="main-column">
+        <div class="section-head">
+          <div>
+            <p class="eyebrow">DECISION MEMORY</p>
+            <h2>What changed?</h2>
+          </div>
+          <div class="search-wrap">
+            <input id="searchInput" type="search" placeholder="Search your meeting memory…">
+            <button id="searchButton" class="ghost-btn">Search</button>
+          </div>
+        </div>
+
+        <div id="driftList" class="drift-list"></div>
+        <div id="searchResults" class="search-results" hidden></div>
+
+        <div class="section-head compact">
+          <div>
+            <p class="eyebrow">PROMISE LEDGER</p>
+            <h2>Who owes what?</h2>
+          </div>
+        </div>
+        <div id="promiseList" class="promise-list"></div>
+
+        <div class="section-head compact">
+          <div>
+            <p class="eyebrow">MEETING MEMORY</p>
+            <h2>Recent conversations</h2>
+          </div>
+        </div>
+        <div id="meetingList" class="meeting-list"></div>
+      </div>
+
+      <aside class="side-column">
+        <div class="side-card">
+          <p class="eyebrow">EVIDENCE FIRST</p>
+          <h3>Nothing important should end as an unattributed summary.</h3>
+          <p>
+            DecisionTrace stores the source meeting, speaker, timestamp range,
+            and transcript statement beside each derived insight.
+          </p>
+        </div>
+
+        <div class="side-card">
+          <p class="eyebrow">DESIGN CHOICE</p>
+          <h3>Small workflow, not another dashboard.</h3>
+          <p>
+            The first version is intentionally narrow: recording in,
+            memory out. No settings maze, no account-management shell,
+            no fake “AI magic”.
+          </p>
+        </div>
+
+        <div class="side-card">
+          <p class="eyebrow">WHIPSCRIBE</p>
+          <h3>Transcription is the evidence substrate.</h3>
+          <p>
+            The integration uses the documented asynchronous job model,
+            speaker-labelled JSON transcripts, insights, playback URLs,
+            idempotent submission and library search.
+          </p>
+          <a href="https://whipscribe.com/docs" target="_blank" rel="noreferrer">Read API docs →</a>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

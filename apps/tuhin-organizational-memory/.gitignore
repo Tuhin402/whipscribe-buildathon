@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+node_modules/
+data/
+uploads/
+recordings/
+*.mp3
+*.m4a
+*.wav
+*.mp4
+*.mov
+*.ogg
+*.webm
+*.flac
