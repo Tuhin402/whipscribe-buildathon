@@ -1,24 +1,31 @@
-export function detectDecisionDrift(decisions) {
+const STOP_WORDS = new Set([
+  "the", "a", "an", "for", "to", "of", "and", "or", "on", "in", "with", "our", "we", "should", "will", "first", "current", "revised", "decision", "architecture"
+]);
+
+export function detectDecisionDrift(decisions = []) {
   const drift = [];
+  const sorted = decisions
+    .slice()
+    .sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0) || Number(a.timestampStart || 0) - Number(b.timestampStart || 0));
 
-  for (let i = 0; i < decisions.length; i += 1) {
-    for (let j = i + 1; j < decisions.length; j += 1) {
-      const a = decisions[i];
-      const b = decisions[j];
+  for (let i = 0; i < sorted.length; i += 1) {
+    for (let j = i + 1; j < sorted.length; j += 1) {
+      const previous = sorted[i];
+      const next = sorted[j];
+      if (!sameTopic(previous, next)) continue;
+      if (normalizeDecision(previous.decision) === normalizeDecision(next.decision)) continue;
 
-      if (!sameTopic(a, b)) continue;
-      if (a.decision === b.decision) continue;
-
-      const type = conflictType(a.decision, b.decision);
+      const pairId = `drift-${previous.id}-${next.id}`;
+      if (drift.some((item) => item.id === pairId)) continue;
 
       drift.push({
-        id: `drift-${a.id}-${b.id}`,
-        previousDecisionId: a.id,
-        newDecisionId: b.id,
-        type,
-        detectedAt: new Date().toISOString(),
-        explanation: `The earlier decision "${a.decision}" was followed by "${b.decision}". Review the linked evidence to understand the change.`,
-        evidence: [...new Set([...(a.evidence || []), ...(b.evidence || [])])]
+        id: pairId,
+        previousDecisionId: previous.id,
+        newDecisionId: next.id,
+        type: conflictType(previous.decision, next.decision),
+        detectedAt: next.createdAt || new Date().toISOString(),
+        explanation: `The earlier decision "${previous.decision}" was followed by "${next.decision}". Review the linked evidence to understand what changed.`,
+        evidence: [...new Set([...(previous.evidence || []), ...(next.evidence || [])])]
       });
     }
   }
@@ -26,26 +33,40 @@ export function detectDecisionDrift(decisions) {
   return drift;
 }
 
-function sameTopic(a, b) {
-  const aTitle = (a.title || "").toLowerCase();
-  const bTitle = (b.title || "").toLowerCase();
-  if (aTitle.includes("database") && bTitle.includes("database")) return true;
+export function markDecisionStatuses(decisions, drift) {
+  const superseded = new Set(drift.map((item) => item.previousDecisionId));
+  return decisions.map((decision) => ({
+    ...decision,
+    status: superseded.has(decision.id) ? "superseded" : (decision.status === "new" ? "current" : decision.status || "current")
+  }));
+}
 
-  const wordsA = new Set(aTitle.split(/\W+/).filter(Boolean));
-  const wordsB = new Set(bTitle.split(/\W+/).filter(Boolean));
-  let overlap = 0;
-  for (const word of wordsA) {
-    if (wordsB.has(word)) overlap += 1;
-  }
-  return overlap >= 1;
+function sameTopic(a, b) {
+  const aTokens = meaningfulTokens(`${a.title || ""} ${a.decision || ""}`);
+  const bTokens = meaningfulTokens(`${b.title || ""} ${b.decision || ""}`);
+  if (!aTokens.size || !bTokens.size) return false;
+
+  const intersection = [...aTokens].filter((word) => bTokens.has(word)).length;
+  const overlap = intersection / Math.max(1, Math.min(aTokens.size, bTokens.size));
+
+  const databasePair = /(mongodb|postgresql|database|storage)/.test(`${[...aTokens].join(" ")} ${[...bTokens].join(" ")}`)
+    && /(mongodb|postgresql|database|storage)/.test(`${[...bTokens].join(" ")}`);
+
+  return overlap >= 0.25 || databasePair;
+}
+
+function meaningfulTokens(value) {
+  return new Set(
+    String(value).toLowerCase().replace(/[^a-z0-9]+/g, " ").split(/\s+/).filter((word) => word.length > 2 && !STOP_WORDS.has(word))
+  );
+}
+
+function normalizeDecision(value) {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function conflictType(previous, next) {
-  if (previous.toLowerCase().includes("postgresql") && next.toLowerCase().includes("mongodb")) {
-    return "changed";
-  }
-  if (previous.toLowerCase().includes("mongodb") && next.toLowerCase().includes("postgresql")) {
-    return "evolved";
-  }
+  if (/postgresql/i.test(previous) && /mongodb/i.test(next)) return "changed";
+  if (/mongodb/i.test(previous) && /postgresql/i.test(next)) return "evolved";
   return "revisited";
 }
