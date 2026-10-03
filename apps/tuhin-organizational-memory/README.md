@@ -2,414 +2,331 @@
 
 DecisionTrace is my Track 4 workflow for the WhipScribe Buildathon.
 
-It starts from one specific user:
+It starts from one specific user: a product or engineering team lead who runs recurring meetings and loses important decision context once the meeting ends.
 
-> A product or engineering team lead who runs recurring meetings and loses
-> important decision context once the meeting ends.
+The product question is not only **"what was said?"**. It is:
 
-The problem is not transcription alone.
+- What did we decide?
+- Why did we decide it?
+- Which assumptions supported the decision?
+- Who disagreed?
+- What did someone promise to do?
+- Did later evidence show completion?
+- Did a later meeting change the decision?
+- What source moment supports each claim?
 
-After a meeting, the durable facts people need are:
+## What changed in this production-ready pass
 
-- what was decided;
-- why it was decided;
-- what assumptions supported it;
-- who disagreed;
-- what someone promised to do;
-- whether that promise was later completed;
-- whether a later conversation changed the decision;
-- what evidence caused the change.
+The first prototype waited for the entire WhipScribe job inside one HTTP request. That made long recordings vulnerable to browser/proxy timeouts and gave the UI very little visibility.
 
-DecisionTrace turns the recording into that evidence-backed organizational memory.
-
-## The workflow
+This pass moves the transcription path behind a persisted workflow record:
 
 ```text
-Meeting recording
-      ↓
-WhipScribe transcription
-      ↓
-Speaker + timestamp evidence
-      ↓
-Decision / commitment extraction
-      ↓
-Persistent memory
-      ↓
-Decision drift
-      ↓
-Promise Ledger
+Browser
+  ↓ 202 Accepted + workflow ID
+DecisionTrace workflow runner
+  ↓
+WhipScribe POST /transcribe or POST /transcribe/url
+  ↓
+Poll GET /jobs/{job_id}
+  ↓
+GET /result?format=json
+  ↓
+Extract evidence
+  ↓
+Update organizational memory
 ```
 
-The user's work is intentionally short:
+The application also adds:
 
-1. upload a meeting;
-2. let WhipScribe transcribe it;
-3. review the resulting decisions and promises;
-4. inspect later changes;
-5. jump back to the source evidence.
-
-## Why recordings are the way in
-
-Meeting recordings are the original source of the decision context. Documents and
-task trackers often contain the final answer but not the discussion that made the
-answer trustworthy.
-
-The recording preserves the sequence:
-
-```text
-proposal → disagreement → assumption → decision → commitment
-```
-
-That sequence is what DecisionTrace keeps.
-
-## Core product concepts
-
-### Decision Memory
-
-A decision stores:
-
-- the decision itself;
-- meeting/job ID;
-- speaker;
-- timestamp range;
-- reasoning;
-- assumptions;
-- disagreements;
-- source evidence.
-
-### Decision Drift
-
-The same decision topic is compared across meetings.
-
-Example:
-
-```text
-Sep 27
-MongoDB for first launch
-        ↓
-Sep 29
-PostgreSQL for first launch
-```
-
-DecisionTrace records that the later decision superseded the earlier one and
-keeps the later evidence that caused the change.
-
-### Promise Ledger
-
-A commitment stores:
-
-- owner;
-- recipient;
-- action;
-- due date when stated;
-- source timestamp;
-- later completion evidence;
-- current status.
-
-The system distinguishes an open promise from a promise for which later
-evidence was found.
+- server-side timeout and retry handling for transient WhipScribe failures;
+- `Retry-After` and exponential-backoff support;
+- idempotency-key propagation;
+- file validation and disk-backed temporary uploads instead of a multi-GB in-memory upload buffer;
+- atomic persistence for the local memory store;
+- request IDs and structured JSON logs;
+- basic security headers and API rate limiting;
+- provider account / retention visibility using `GET /api/v1/me`;
+- recent WhipScribe job inspection using `GET /api/v1/jobs`;
+- public URL ingestion using `POST /api/v1/transcribe/url`;
+- short-lived audio playback through a server-side refresh endpoint;
+- clip discovery using WhipScribe's documented preprocess/candidate endpoints;
+- workflow recovery that marks interrupted in-process jobs explicitly instead of silently pretending they completed;
+- expanded tests for extraction, drift, promises, storage, and upstream retry behavior.
 
 ## WhipScribe API integration
 
-The implementation uses the documented API surface:
+The implementation is intentionally limited to the public `/api/v1/*` surface described in the current WhipScribe API documentation. The current docs say that paths under `/api/v1/*` are the public, versioned integration surface and that response objects are additive within the same version.
 
-- `POST /api/v1/transcribe`
-- `GET /api/v1/jobs/{job_id}`
-- `GET /api/v1/jobs/{job_id}/result?format=json`
-- `GET /api/v1/jobs/{job_id}/insights`
-- `GET /api/v1/jobs/{job_id}/audio/url`
-- `POST /api/v1/library/search`
-- `POST /api/v1/jobs/{job_id}/clips` (optional extension)
+The live client currently uses these documented integration points:
 
-The transcription path is asynchronous:
+| DecisionTrace feature | WhipScribe endpoint |
+|---|---|
+| File transcription | `POST /api/v1/transcribe` |
+| URL transcription | `POST /api/v1/transcribe/url` |
+| Polling | `GET /api/v1/jobs/{job_id}` |
+| Transcript evidence | `GET /api/v1/jobs/{job_id}/result?format=json` |
+| Account / retention | `GET /api/v1/me` |
+| Recent provider jobs | `GET /api/v1/jobs?limit=...` |
+| Playback | `GET /api/v1/jobs/{job_id}/audio/url` |
+| Clip index | `POST /api/v1/jobs/{job_id}/clips/preprocess` |
+| Clip candidates | `GET /api/v1/jobs/{job_id}/clips/candidates?...` |
+| Clip rendering | `POST /api/v1/jobs/{job_id}/clips` |
+| Clip status | `GET /api/v1/clips/{clip_id}` |
+| Optional insights | `GET /api/v1/jobs/{job_id}/insights` |
 
-```text
-POST /transcribe
-    ↓
-job_id
-    ↓
-poll GET /jobs/{job_id}
-    ↓
-done
-    ↓
-GET /result?format=json
-```
+WhipScribe documents multipart file uploads, a maximum of 10 hours per file, diarization, word timestamps, the `source` field, asynchronous job processing, `speech_detected`, transcript JSON, short-lived playback URLs, and idempotency keys. It also documents `429` and `502` retryable failure modes and the `transcript_locked` / `NO_CREDITS` cases that clients should surface rather than hide.
 
-The client uses a three-second polling interval by default and sends an
-`Idempotency-Key` for safe retries.
+### Important API boundaries
 
-The JSON transcript is used as the evidence layer because it carries segment
-timestamps, speaker labels and word timestamps.
+The current docs describe Google Drive connector support as early access and account-scoped. The connector also requires OAuth-specific account setup, so this prototype does **not** pretend to implement Drive OAuth itself.
 
-## API constraints I designed around
+The current docs also describe clip rendering as limited to uploaded or recorded jobs and bounded to a 3–180 second source range. DecisionTrace therefore exposes clip discovery for live jobs but keeps URL-based jobs transcript-first.
 
-The public WhipScribe API documentation is marked Preview and currently says
-API keys are self-serve and require account credit. The docs state there is no
-free API tier and that a key requires positive balance.
+The API documentation is currently marked **Preview**, so the integration layer is isolated in `server/whipscribe.js` to keep future API changes localized.
 
-I am therefore **not** committing an API key or pretending to have run a live
-transcription without access to paid API credits.
-
-Instead, this project has two honest modes:
+## Demo Mode vs Live Mode
 
 ### Demo Mode
 
 `DEMO_MODE=true`
 
-The deployed/reviewable app uses a bundled, deterministic meeting dataset. The UI
-shows that it is Demo Mode.
+The application seeds two deterministic meetings showing:
 
-This allows the complete product workflow to be reviewed without charging a
-WhipScribe account.
-
-### Live Mode
-
-`DEMO_MODE=false`
+```text
+MongoDB launch decision
+        ↓ benchmark evidence
+PostgreSQL launch decision
+```
 
 and:
 
-```env
-WHIPSCRIBE_API_KEY=...
+```text
+Sarah promises benchmark results
+        ↓ later meeting evidence
+Promise marked completed
 ```
 
-The same UI sends recordings through the live WhipScribe API.
+No WhipScribe API key is required for the demo.
 
-No production code path relies on an invented API response.
+### Live Mode
 
-## Why I am not building the whole platform first
+Set:
 
-Track 4 asks for a workflow, not a new project-management suite.
+```env
+DEMO_MODE=false
+WHIPSCRIBE_API_KEY=your_key
+```
 
-The first version intentionally removes everything that does not help a user get
-from a meeting recording to organizational memory.
+The server then sends recordings to the live WhipScribe API. The API key is never sent to browser JavaScript.
 
-There is no settings-heavy onboarding flow, team-admin dashboard, or external
-task-system sync in the first pass.
+## Local setup
 
-## States
-
-The application explicitly handles:
-
-### No memory
-
-No meetings or evidence exist yet.
-
-### Uploading / processing
-
-The UI shows that the recording is being sent for transcription.
-
-### No speech
-
-WhipScribe can return a completed job with `speech_detected: false`. The client
-should branch on that field rather than treating the job as an API failure.
-
-### Failed transcription
-
-A failed WhipScribe job is shown as a failed workflow rather than a successful
-memory.
-
-### Transcript locked / credits unavailable
-
-The server returns the upstream error and does not fabricate a transcript.
-
-### Done
-
-A completed transcript is transformed into decisions, commitments, evidence
-links and drift.
-
-## Local development
-
-Requirements:
-
-- Node.js 20+
-- npm
-
-Run:
+Requirements: **Node.js 22.12+** and npm.
 
 ```bash
 cd apps/tuhin-organizational-memory
-npm install
 cp .env.example .env
+npm install
+npm test
+npm run check
 npm start
 ```
 
 Open:
 
 ```text
-http://localhost:3000
+http://127.0.0.1:3000
 ```
 
-Demo mode works without a WhipScribe API key.
+For demo mode, keep `DEMO_MODE=true` and leave the API key blank.
 
 ## Environment
 
 ```env
 PORT=3000
+HOST=127.0.0.1
 WHIPSCRIBE_BASE_URL=https://whipscribe.com/api/v1
 WHIPSCRIBE_API_KEY=
-WHIPSCRIBE_USER_EMAIL=
+WHIPSCRIBE_USER_EMAIL=tuhinsarkar581@gmail.com
 DEMO_MODE=true
-POLL_INTERVAL_MS=3000
 DATA_DIR=./data
+UPLOAD_DIR=./uploads
+POLL_INTERVAL_MS=3000
+POLL_TIMEOUT_MS=900000
+WHIPSCRIBE_TIMEOUT_MS=30000
+WHIPSCRIBE_MAX_RETRIES=3
+MAX_UPLOAD_BYTES=536870912
+RATE_LIMIT_PER_MINUTE=30
+TRUST_PROXY=false
+LOG_LEVEL=info
 ```
 
-For live mode:
+Never commit `.env` or `uploads/`.
 
-```env
-DEMO_MODE=false
-WHIPSCRIBE_API_KEY=your_local_key
+## API routes exposed by DecisionTrace
+
+| Route | Purpose |
+|---|---|
+| `GET /api/config` | UI-safe runtime configuration |
+| `GET /api/health` | liveness check |
+| `GET /api/health/deep` | optional WhipScribe reachability check |
+| `GET /api/dashboard` | memory + metrics |
+| `GET /api/workflows` | recent workflow state |
+| `GET /api/workflows/:id` | one workflow state |
+| `GET /api/provider/me` | provider account snapshot |
+| `GET /api/provider/jobs` | recent WhipScribe jobs |
+| `GET /api/meeting/:id` | meeting, decisions, promises and questions |
+| `GET /api/meeting/:id/audio-url` | refreshes a short-lived provider playback URL |
+| `GET /api/meeting/:id/moments` | clip candidate discovery |
+| `POST /api/transcribe` | queue a local file transcription |
+| `POST /api/transcribe-url` | queue a remote URL transcription |
+| `POST /api/search` | local transcript/evidence search |
+| `POST /api/meeting/:id/clip` | render a provider clip |
+| `GET /api/clip/:clipId` | poll provider clip status |
+| `POST /api/demo/reset` | reset deterministic demo data |
+
+## Production-like design choices
+
+### 1. The request is no longer the job
+
+Long-running transcription belongs to a workflow record, not a browser request. This removes a major source of timeouts.
+
+The current runner is intentionally **in-process**. If the server restarts, queued/processing jobs are marked `WORKFLOW_INTERRUPTED` rather than being falsely presented as successful.
+
+A true multi-instance production deployment should replace the runner with a durable queue such as Redis/BullMQ or a managed queue and make the memory store a real database.
+
+### 2. Temporary files are not loaded into a giant memory buffer
+
+Multer writes the upload to `uploads/`. Node's `fs.openAsBlob()` is used to give the WhipScribe client a Blob backed by that file. The temp file is deleted after the provider submission completes or fails.
+
+### 3. The provider client is resilient
+
+The HTTP client adds:
+
+- bounded request timeouts;
+- retry handling for `429`, `500`, `502`, `503`, `504`;
+- `Retry-After` support;
+- exponential backoff;
+- stable error objects with HTTP status + provider code;
+- polling timeout protection.
+
+### 4. Evidence is still the invariant
+
+Heuristics can be wrong. That is why every extracted decision or promise retains the meeting ID and timestamp reference. The UI can open the source meeting rather than asking the user to trust a detached summary.
+
+### 5. Provider playback URLs are treated as ephemeral
+
+WhipScribe says the audio URL is short-lived and recommends refetching when playback expires. DecisionTrace therefore refreshes the URL on evidence-open instead of treating it as permanent storage.
+
+## Known limitations
+
+This is production-like application code, not a claim that a single-process prototype is production infrastructure.
+
+Still intentionally missing:
+
+- external authentication / multi-user isolation;
+- durable background queue and worker fleet;
+- PostgreSQL or another production database;
+- object storage for uploaded source files;
+- signed webhooks;
+- Google Drive OAuth / connector activation;
+- external writes to Linear, Jira, Notion or Slack;
+- full LLM reasoning layer;
+- collaborative editing / audit trails;
+- metrics and tracing backend such as OpenTelemetry + Prometheus/Grafana.
+
+## Manual smoke test
+
+### Demo
+
+```bash
+npm test
+npm run check
+npm start
 ```
 
-Never commit `.env`.
+Then verify:
+
+```text
+GET /api/health
+GET /api/dashboard
+POST /api/search            {"q":"PostgreSQL"}
+GET /api/meeting/demo-meeting-002
+GET /api/meeting/demo-meeting-001/moments?kind=question
+POST /api/demo/reset
+```
+
+### Live
+
+Only claim a live API run after a real request succeeds with a valid WhipScribe key and usable account balance.
+
+Suggested sequence:
+
+```text
+1. switch DEMO_MODE=false
+2. configure WHIPSCRIBE_API_KEY
+3. start the app
+4. upload a permitted recording
+5. observe the returned workflow ID
+6. watch /api/workflows/:id progress
+7. open the resulting meeting
+8. refresh playback
+9. run clip candidate discovery
+10. render a 3–180 second clip
+```
 
 ## Project structure
 
 ```text
 apps/tuhin-organizational-memory/
 ├── README.md
+├── DEPLOYMENT.md
+├── API-INTEGRATION.md
+├── OPERATIONS.md
+├── CHANGELOG.md
 ├── .env.example
 ├── .gitignore
 ├── package.json
 ├── server/
-│   ├── demo-data.js
-│   ├── drift.js
-│   ├── extractor.js
-│   ├── pipeline.js
-│   ├── promise-ledger.js
+│   ├── config.js
+│   ├── logger.js
+│   ├── rate-limit.js
+│   ├── validation.js
 │   ├── storage.js
 │   ├── whipscribe.js
+│   ├── workflow-runner.js
+│   ├── extractor.js
+│   ├── drift.js
+│   ├── promise-ledger.js
+│   ├── pipeline.js
+│   ├── demo-data.js
 │   └── index.js
-└── public/
-    ├── index.html
-    ├── app.js
-    └── styles.css
+├── public/
+│   ├── index.html
+│   ├── app.js
+│   └── styles.css
+└── test/
+    ├── pipeline.test.js
+    ├── extractor.test.js
+    ├── drift.test.js
+    ├── promise.test.js
+    ├── storage.test.js
+    └── whipscribe.test.js
 ```
 
-## What I deliberately kept lightweight
+## Track 4 product direction
 
-The first extraction layer is intentionally explainable. It uses phrase-based
-signal detection for decisions, commitments, assumptions, disagreements and
-questions.
-
-That is deliberate.
-
-A more advanced language model layer can be added after the evidence model and
-workflow have been validated with a real person.
-
-The extracted object is still editable and always retains its source timestamp.
-
-## What works now
-
-- Reviewable organizational-memory UI.
-- Demo end-to-end workflow.
-- Decision Memory.
-- Decision Drift example.
-- Promise Ledger.
-- Timestamped evidence.
-- Local search through transcript evidence.
-- Live WhipScribe integration path.
-- Idempotent job submission.
-- Polling of asynchronous jobs.
-- Transcript JSON retrieval.
-- Optional insights retrieval.
-- Playback URL retrieval path.
-- Optional clip-rendering path.
-- Clear demo/live boundary.
-- Error-state handling in the live API path.
-
-## What does not work yet
-
-- The repository currently cannot claim a real paid WhipScribe API run unless a
-  key with usable credit is configured locally.
-- The extraction layer is heuristic rather than a full LLM reasoning system.
-- Promise completion is evidence-based but does not yet verify an external task
-  system such as Linear/Jira.
-- No automatic writes to Notion, Linear, Jira or Slack.
-- No multi-user authentication layer.
-- No persistent cloud database or background worker in the prototype.
-- No signed webhook path because the self-serve workflow is built around polling.
-- No production-grade object storage for uploaded files.
-
-These are intentionally scoped out rather than hidden.
-
-## What I would validate with one real person
-
-I would give the prototype to one product/engineering lead who runs recurring
-technical meetings.
-
-The test is simple:
-
-1. give them a real meeting recording they are allowed to share;
-2. ask them to find the current database decision;
-3. ask what the previous decision was;
-4. ask why it changed;
-5. ask who promised the benchmark report;
-6. ask whether the promise was completed;
-7. ask them to open the source moment.
-
-The success condition is that they stop rereading full meetings to answer those
-questions.
-
-## Two-minute demo plan
+The product remains intentionally narrow:
 
 ```text
-0:00  Open DecisionTrace
-0:10  Show the meeting memory
-0:25  Open the database decision
-0:45  Show the source timestamp
-1:00  Open Decision Drift
-1:20  Show MongoDB → PostgreSQL and the evidence
-1:35  Open Promise Ledger
-1:50  Show completed benchmark promise
-2:00  End on the evidence-first workflow
+meetings → evidence → decisions → promises → drift → outcomes
 ```
 
-The demo should show one user problem being removed, not the internal code.
-
-## Vision
-
-The first version remembers decisions and promises from meetings.
-
-The longer-term product is an organizational memory layer:
-
-```text
-meetings
-  ↓
-decisions
-  ↓
-projects
-  ↓
-documents
-  ↓
-tasks
-  ↓
-outcomes
-```
-
-Future integrations could connect the memory to Linear, Jira, Notion and Slack.
-
-The important invariant would remain:
-
-> Important organizational claims should be traceable to evidence.
-
-A person should be able to ask:
-
-- What did we decide?
-- Why?
-- What assumption did that depend on?
-- Who disagreed?
-- Did we later change it?
-- Why did we change it?
-- Who said they would do something?
-- Did it actually happen?
-
-and reach the original moment in the conversation.
-
-That is the direction in which DecisionTrace can grow from a meeting workflow
-into a durable organizational memory system.
+The next meaningful expansion is not another dashboard. It is connecting these evidence-backed objects to the systems where work actually changes: project trackers, documents and team communication.
 
 ## API references
 
 - WhipScribe API docs: https://whipscribe.com/docs
-- WhipScribe Business APIs: https://whipscribe.com/apis
-- WhipScribe MCP: https://whipscribe.com/claude
+- WhipScribe APIs: https://app.whipscribe.com/apis
+- Buildathon repository: https://github.com/neugence/whipscribe-buildathon
