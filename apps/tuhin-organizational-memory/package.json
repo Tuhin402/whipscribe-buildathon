@@ -1,16 +1,17 @@
 {
   "name": "decisiontrace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "Track 4 WhipScribe workflow: evidence-backed organizational memory, decision drift, and promise tracking.",
+  "description": "WhipScribe Track 4 workflow: evidence-backed organizational memory, decision drift, promises, and reviewable evidence.",
   "type": "module",
   "scripts": {
-    "start": "node server/index.js",
-    "dev": "node --watch server/index.js",
-    "test": "node --test test/*.test.js"
+    "start": "node --env-file-if-exists=.env server/index.js",
+    "dev": "node --watch --env-file-if-exists=.env server/index.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check server/index.js && node --check server/config.js && node --check server/workflow-runner.js && node --check public/app.js"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22.12"
   },
   "dependencies": {
     "express": "^5.1.0",

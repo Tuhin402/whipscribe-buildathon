@@ -13,3 +13,5 @@ recordings/
 *.ogg
 *.webm
 *.flac
+*.tmp
+*.log
